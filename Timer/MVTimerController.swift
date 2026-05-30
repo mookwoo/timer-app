@@ -76,7 +76,7 @@ final class MVTimerController: NSWindowController {
     let content = UNMutableNotificationContent()
     content.title = "It's time! 🕘"
     content.categoryIdentifier = MVNotificationIdentifiers.timerCompleteCategoryIdentifier
-    content.userInfo = [MVNotificationIdentifiers.controllerIdentifierKey: self.identifier]
+    content.userInfo = [MVNotificationUserInfoKeys.controllerIdentifier: self.identifier]
 
     let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
     UNUserNotificationCenter.current().add(request)

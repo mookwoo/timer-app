@@ -168,15 +168,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     withCompletionHandler completionHandler: @escaping () -> Void) {
     let actionIdentifier = response.actionIdentifier
     let controllerIdentifier = response.notification.request.content.userInfo[
-      MVNotificationIdentifiers.controllerIdentifierKey
+      MVNotificationUserInfoKeys.controllerIdentifier
     ] as? String
+    nonisolated(unsafe) let completionHandler = completionHandler
 
-    Task { @MainActor in
-      guard let appDelegate = NSApplication.shared.delegate as? AppDelegate else { return }
-      appDelegate.handleNotificationAction(actionIdentifier, controllerIdentifier: controllerIdentifier)
+    Task { @MainActor [weak self] in
+      self?.handleNotificationAction(actionIdentifier, controllerIdentifier: controllerIdentifier)
+      completionHandler()
     }
-
-    completionHandler()
   }
 
   func addBadgeToDock(controller: MVTimerController) {
@@ -218,15 +217,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   }
 
   private func handleNotificationAction(_ actionIdentifier: String, controllerIdentifier: String?) {
-    guard let controllerIdentifier,
-          let controller = self.controllers.first(where: { $0.identifier == controllerIdentifier }) else { return }
+    let controller = self.controller(matching: controllerIdentifier)
 
     switch actionIdentifier {
     case MVNotificationIdentifiers.restartTimerActionIdentifier:
       controller.restartLastTimer()
 
     case MVNotificationIdentifiers.addFiveMinutesActionIdentifier:
-      controller.addTime(seconds: 5 * 60)
+      controller.addTime(seconds: CGFloat(5 * 60))
 
     case MVNotificationIdentifiers.stopTimerActionIdentifier:
       controller.resetTimer()
@@ -238,6 +236,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     default:
       break
     }
+  }
+
+  private func controller(matching identifier: String?) -> MVTimerController {
+    if let identifier,
+       let controller = self.controllers.first(where: { $0.identifier == identifier }) {
+      return controller
+    }
+
+    if let controller = self.controllers.first {
+      return controller
+    }
+
+    let controller = MVTimerController()
+    self.controllers.append(controller)
+    self.addBadgeToDock(controller: controller)
+    return controller
   }
 
   private func registerNotificationCategories() {
