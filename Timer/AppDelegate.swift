@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     self.addBadgeToDock(controller: controller)
 
     UNUserNotificationCenter.current().delegate = self
+    self.registerNotificationCategories()
     Task {
       do {
         try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
@@ -161,6 +162,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     completionHandler([.banner, .sound])
   }
 
+  nonisolated func userNotificationCenter(
+    _: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void) {
+    let actionIdentifier = response.actionIdentifier
+    let controllerIdentifier = response.notification.request.content.userInfo[
+      MVNotificationIdentifiers.controllerIdentifierKey
+    ] as? String
+
+    Task { @MainActor in
+      guard let appDelegate = NSApplication.shared.delegate as? AppDelegate else { return }
+      appDelegate.handleNotificationAction(actionIdentifier, controllerIdentifier: controllerIdentifier)
+    }
+
+    completionHandler()
+  }
+
   func addBadgeToDock(controller: MVTimerController) {
     if self.currentlyInDock != controller {
       self.removeBadgeFromDock()
@@ -197,6 +215,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
   private func handleUserDefaultsChange() {
     self.staysOnTop = UserDefaults.standard.bool(forKey: MVUserDefaultsKeys.staysOnTop)
+  }
+
+  private func handleNotificationAction(_ actionIdentifier: String, controllerIdentifier: String?) {
+    guard let controllerIdentifier,
+          let controller = self.controllers.first(where: { $0.identifier == controllerIdentifier }) else { return }
+
+    switch actionIdentifier {
+    case MVNotificationIdentifiers.restartTimerActionIdentifier:
+      controller.restartLastTimer()
+
+    case MVNotificationIdentifiers.addFiveMinutesActionIdentifier:
+      controller.addTime(seconds: 5 * 60)
+
+    case MVNotificationIdentifiers.stopTimerActionIdentifier:
+      controller.resetTimer()
+
+    case UNNotificationDefaultActionIdentifier:
+      controller.window?.makeKeyAndOrderFront(nil)
+      NSApplication.shared.activate(ignoringOtherApps: true)
+
+    default:
+      break
+    }
+  }
+
+  private func registerNotificationCategories() {
+    let restartAction = UNNotificationAction(
+      identifier: MVNotificationIdentifiers.restartTimerActionIdentifier,
+      title: "Restart",
+      options: []
+    )
+    let addFiveMinutesAction = UNNotificationAction(
+      identifier: MVNotificationIdentifiers.addFiveMinutesActionIdentifier,
+      title: "+5 min",
+      options: []
+    )
+    let stopAction = UNNotificationAction(
+      identifier: MVNotificationIdentifiers.stopTimerActionIdentifier,
+      title: "Stop",
+      options: [.destructive]
+    )
+    let category = UNNotificationCategory(
+      identifier: MVNotificationIdentifiers.timerCompleteCategoryIdentifier,
+      actions: [restartAction, addFiveMinutesAction, stopAction],
+      intentIdentifiers: [],
+      options: []
+    )
+
+    UNUserNotificationCenter.current().setNotificationCategories([category])
   }
 
   private func observeNotifications() {

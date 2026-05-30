@@ -3,6 +3,8 @@ import AVFoundation
 import UserNotifications
 
 final class MVTimerController: NSWindowController {
+  let identifier = UUID().uuidString
+
   private weak var dockMenuItem: NSMenuItem?
   let clockView = MVClockView()
 
@@ -73,6 +75,8 @@ final class MVTimerController: NSWindowController {
   private func handleClockTimer() {
     let content = UNMutableNotificationContent()
     content.title = "It's time! 🕘"
+    content.categoryIdentifier = MVNotificationIdentifiers.timerCompleteCategoryIdentifier
+    content.userInfo = [MVNotificationIdentifiers.controllerIdentifierKey: self.identifier]
 
     let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
     UNUserNotificationCenter.current().add(request)
@@ -99,5 +103,23 @@ final class MVTimerController: NSWindowController {
     } else {
       self.soundURL = nil
     }
+  }
+
+  func restartLastTimer() {
+    guard let seconds = self.clockView.lastTimerSeconds, seconds > 0 else { return }
+    self.clockView.startTimer(seconds: seconds)
+  }
+
+  func addTime(seconds: CGFloat) {
+    let currentSeconds = self.clockView.timerTask != nil || self.clockView.paused ? self.clockView.seconds : 0
+    self.clockView.startTimer(seconds: currentSeconds + seconds)
+  }
+
+  func resetTimer() {
+    self.clockView.paused = false
+    self.clockView.stop()
+    self.clockView.seconds = 0
+    self.clockView.updateTimerTime()
+    self.clockView.inputSeconds = false
   }
 }
