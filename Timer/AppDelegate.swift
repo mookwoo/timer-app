@@ -1,6 +1,18 @@
 import AppKit
 import UserNotifications
 
+private final class MVNotificationResponseCompletion: @unchecked Sendable {
+  private let completionHandler: () -> Void
+
+  init(_ completionHandler: @escaping () -> Void) {
+    self.completionHandler = completionHandler
+  }
+
+  func call() {
+    self.completionHandler()
+  }
+}
+
 @main
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -170,11 +182,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     let controllerIdentifier = response.notification.request.content.userInfo[
       MVNotificationUserInfoKeys.controllerIdentifier
     ] as? String
+    let completion = MVNotificationResponseCompletion(completionHandler)
 
-    completionHandler()
-
-    Task { @MainActor [weak self] in
+    DispatchQueue.main.async { [weak self, completion] in
       self?.handleNotificationAction(actionIdentifier, controllerIdentifier: controllerIdentifier)
+      completion.call()
     }
   }
 
