@@ -170,11 +170,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     let controllerIdentifier = response.notification.request.content.userInfo[
       MVNotificationUserInfoKeys.controllerIdentifier
     ] as? String
-    nonisolated(unsafe) let completionHandler = completionHandler
+
+    completionHandler()
 
     Task { @MainActor [weak self] in
       self?.handleNotificationAction(actionIdentifier, controllerIdentifier: controllerIdentifier)
-      completionHandler()
     }
   }
 
@@ -227,7 +227,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       controller.addTime(seconds: CGFloat(5 * 60))
 
     case MVNotificationIdentifiers.stopTimerActionIdentifier:
-      controller.resetTimer()
+      controller.clockView.paused = false
+      controller.clockView.stop()
 
     case UNNotificationDefaultActionIdentifier:
       controller.window?.makeKeyAndOrderFront(nil)
@@ -249,6 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     let controller = MVTimerController()
+    controller.window?.level = self.windowLevel
     self.controllers.append(controller)
     self.addBadgeToDock(controller: controller)
     return controller
