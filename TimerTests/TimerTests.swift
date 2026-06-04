@@ -257,3 +257,85 @@ final class TimerLogicTests: XCTestCase {
     XCTAssertEqual(TimerLogic.accessibilityTimeDescription(minutes: 0, seconds: 0), "0 seconds")
   }
 }
+
+final class TimerSessionTests: XCTestCase {
+  private let startDate = Date(timeIntervalSinceReferenceDate: 1_000)
+
+  func testStartStoresDeadlineAndLastDuration() {
+    var session = TimerSession()
+    session.setSeconds(90)
+
+    XCTAssertTrue(session.start(now: self.startDate))
+
+    XCTAssertTrue(session.isRunning)
+    XCTAssertFalse(session.isPaused)
+    XCTAssertEqual(session.lastTimerSeconds, 90)
+    XCTAssertEqual(session.timerTime, self.startDate.addingTimeInterval(90))
+  }
+
+  func testStartRejectsZeroDuration() {
+    var session = TimerSession()
+
+    XCTAssertFalse(session.start(now: self.startDate))
+    XCTAssertFalse(session.isRunning)
+    XCTAssertNil(session.timerTime)
+  }
+
+  func testPauseThenStopKeepsPausedState() {
+    var session = TimerSession()
+    session.setSeconds(60)
+    XCTAssertTrue(session.start(now: self.startDate))
+
+    session.pause()
+    session.stop()
+
+    XCTAssertTrue(session.isPaused)
+    XCTAssertFalse(session.isRunning)
+    XCTAssertEqual(session.seconds, 60)
+  }
+
+  func testResetClearsTimerAndInputMode() {
+    var session = TimerSession()
+    session.setSeconds(330)
+    session.inputSeconds = true
+    XCTAssertTrue(session.start(now: self.startDate))
+
+    session.reset()
+
+    XCTAssertEqual(session.seconds, 0)
+    XCTAssertFalse(session.inputSeconds)
+    XCTAssertFalse(session.isRunning)
+    XCTAssertFalse(session.isPaused)
+  }
+
+  func testDigitInputUpdatesSessionValue() {
+    var session = TimerSession()
+
+    XCTAssertTrue(session.processDigitInput(5))
+
+    XCTAssertEqual(session.seconds, 300)
+    XCTAssertFalse(session.isRunning)
+    XCTAssertNotNil(session.timerTime)
+  }
+
+  func testBackspaceUpdatesSessionValue() {
+    var session = TimerSession()
+    session.setSeconds(53 * 60)
+
+    session.processBackspace()
+
+    XCTAssertEqual(session.seconds, 5 * 60)
+  }
+
+  func testUpdateRemainingCompletesAtZero() {
+    var session = TimerSession()
+    session.setSeconds(3)
+    XCTAssertTrue(session.start(now: self.startDate))
+
+    let completed = session.updateRemaining(now: self.startDate.addingTimeInterval(3.1))
+
+    XCTAssertTrue(completed)
+    XCTAssertEqual(session.seconds, 0)
+    XCTAssertFalse(session.isRunning)
+  }
+}

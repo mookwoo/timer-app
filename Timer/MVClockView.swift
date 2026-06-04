@@ -50,8 +50,14 @@ final class MVClockView: NSView {
     formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "jj:mm", options: 0, locale: Locale.current)
     return formatter
   }()
-  var inputSeconds: Bool = false
-  var lastTimerSeconds: CGFloat?
+  var session = TimerSession()
+  var inputSeconds: Bool {
+    get { self.session.inputSeconds }
+    set { self.session.inputSeconds = newValue }
+  }
+  var lastTimerSeconds: CGFloat? {
+    self.session.lastTimerSeconds
+  }
   var inDock: Bool = false {
     didSet {
       if !self.inDock {
@@ -71,7 +77,9 @@ final class MVClockView: NSView {
     }
   }
   var timerTime: Date? {
-    didSet {
+    get { self.session.timerTime }
+    set {
+      self.session.setTimerTime(newValue)
       if self.windowIsVisible {
         self.updateTimeLabel()
       }
@@ -81,24 +89,70 @@ final class MVClockView: NSView {
   private var notificationTasks: [Task<Void, Never>] = []
   var currentTimeTask: Task<Void, Never>?
   var timerTask: Task<Void, Never>?
-  var paused: Bool = false {
-    didSet {
-      self.layoutPauseViews()
+  var paused: Bool {
+    get { self.session.isPaused }
+    set {
+      let previousValue = self.session.isPaused
+      self.session.isPaused = newValue
+      if previousValue != self.session.isPaused {
+        self.layoutPauseViews()
+      }
     }
   }
 
-  var seconds: CGFloat = 0.0 {
-    didSet {
-      if self.windowIsVisible {
-        self.updateLabels()
-        self.layoutSubviews()
+  var isRunning: Bool {
+    self.session.isRunning
+  }
+
+  var seconds: CGFloat {
+    get { self.session.seconds }
+    set {
+      self.session.setSeconds(newValue)
+      self.updateAfterSecondsChanged()
+    }
+  }
+
+  func updateAfterSecondsChanged() {
+    if self.windowIsVisible {
+      self.updateLabels()
+      self.layoutSubviews()
+    }
+    self.updateBadge()
+  }
+
+  func updateAfterSessionChanged(updateTimerTimeLabel: Bool = true) {
+    if self.windowIsVisible {
+      self.updateLabels()
+      if updateTimerTimeLabel {
+        self.updateTimeLabel()
       }
-      self.updateBadge()
+      self.layoutSubviews()
+    }
+    self.layoutPauseViews()
+    self.updateBadge()
+  }
+
+  func updateAfterRunStateChanged() {
+    self.layoutPauseViews()
+    self.updateBadge()
+  }
+
+  func cancelTimerTask() {
+    self.timerTask?.cancel()
+    self.timerTask = nil
+  }
+
+  func runTimerTask() {
+    self.timerTask = Task { [weak self] in
+      while !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(1), tolerance: .milliseconds(30))
+        self?.tick()
+      }
     }
   }
 
   var minutes: CGFloat {
-    floor(self.seconds / 60)
+    self.session.minutes
   }
 
   private var progress: CGFloat {
@@ -199,38 +253,42 @@ extension MVClockView {
     } else {
       seconds -= seconds.truncatingRemainder(dividingBy: 60)
     }
-    self.seconds = seconds
-    self.updateTimerTime()
-
     self.stop()
 
-    self.paused = false
+    self.session.setSeconds(seconds)
+    self.session.updateTimerTime()
+    self.updateAfterSessionChanged()
   }
 
   private func handleArrowControlMouseUp() {
-    self.updateTimerTime()
     self.start()
   }
 
   func handleClick() {
     guard self.seconds > 0 else { return }
-    if self.timerTask == nil {
-      self.updateTimerTime()
+    if !self.isRunning {
       self.start()
     } else {
-      self.paused = true
-      self.stop()
+      self.session.pause()
+      self.cancelTimerTask()
+      self.updateAfterRunStateChanged()
     }
     self.postAccessibilityValueChanged()
   }
 
   private func layoutPauseViews() {
-    let showPauseIcon = self.paused && self.timerTask != nil
+    let showPauseIcon = self.paused
+    let pauseIconAlpha = showPauseIcon ? 1.0 : 0.0
+    let timerTimeAlpha = showPauseIcon ? 0.0 : 1.0
+    guard self.pauseIconImageView.alphaValue != pauseIconAlpha || self.timerTimeLabel.alphaValue != timerTimeAlpha else {
+      return
+    }
+
     NSAnimationContext.runAnimationGroup { ctx in
       ctx.duration = 0.2
       ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-      self.pauseIconImageView.animator().alphaValue = showPauseIcon ? 1 : 0
-      self.timerTimeLabel.animator().alphaValue = showPauseIcon ? 0 : 1
+      self.pauseIconImageView.animator().alphaValue = pauseIconAlpha
+      self.timerTimeLabel.animator().alphaValue = timerTimeAlpha
     }
   }
 
@@ -241,7 +299,10 @@ extension MVClockView {
   }
 
   func updateTimerTime() {
-    self.timerTime = Date(timeIntervalSinceNow: Double(self.seconds))
+    self.session.updateTimerTime()
+    if self.windowIsVisible {
+      self.updateTimeLabel()
+    }
   }
 
   private func updateLabels() {
@@ -265,7 +326,7 @@ extension MVClockView {
 
   private func updateBadge() {
     if self.inDock {
-      if self.timerTask != nil || self.paused {
+      if self.isRunning || self.paused {
         let badgeSeconds = Int(self.seconds.truncatingRemainder(dividingBy: 60))
         let badgeMinutes = Int(self.minutes)
         NSApplication.shared.dockTile.badgeLabel = TimerLogic.badgeString(minutes: badgeMinutes, seconds: badgeSeconds)

@@ -17,7 +17,7 @@ extension MVClockView {
   }
 
   override func scrollWheel(with event: NSEvent) {
-    guard self.timerTask == nil, !self.paused else { return }
+    guard !self.isRunning, !self.paused else { return }
 
     let delta: CGFloat
     if event.hasPreciseScrollingDeltas {
@@ -37,8 +37,9 @@ extension MVClockView {
       newSeconds -= newSeconds.truncatingRemainder(dividingBy: 60)
     }
 
-    self.seconds = newSeconds
-    self.updateTimerTime()
+    self.session.setSeconds(newSeconds)
+    self.session.updateTimerTime()
+    self.updateAfterSessionChanged()
   }
 
   override func mouseUp(with event: NSEvent) {
@@ -65,7 +66,7 @@ extension MVClockView {
     } else {
       switch chars {
       case ".":
-        self.inputSeconds.toggle()
+        self.session.inputSeconds.toggle()
 
       case "\u{1B}": // escape
         self.resetTimer()
@@ -77,9 +78,8 @@ extension MVClockView {
         self.handleClick()
 
       case "r":
-        if self.timerTask == nil, !self.paused, let seconds = self.lastTimerSeconds {
-          self.seconds = seconds
-          self.handleClick()
+        if !self.isRunning, !self.paused, let seconds = self.lastTimerSeconds {
+          self.startTimer(seconds: seconds)
         }
 
       default:
@@ -89,48 +89,28 @@ extension MVClockView {
   }
 
   private func adjustMinutes(by minutes: Int) {
-    self.seconds = max(0, self.seconds + CGFloat(minutes * 60))
-    self.updateTimerTime()
+    self.session.adjustMinutes(by: minutes)
+    self.updateAfterSessionChanged()
   }
 
   private func resetTimer() {
-    self.paused = false
     self.stop()
-    self.seconds = 0
-    self.updateTimerTime()
-    self.inputSeconds = false
+    self.session.reset()
+    self.updateAfterSessionChanged()
   }
 
   private func handleBackspace() {
-    let currentSeconds = self.seconds.truncatingRemainder(dividingBy: 60)
-    let currentMinutes = floor(self.seconds / 60)
-    self.paused = false
     self.stop()
-    self.seconds = TimerLogic.processBackspace(
-      currentSeconds: currentSeconds,
-      currentMinutes: currentMinutes,
-      inputSeconds: self.inputSeconds
-    )
-    self.updateTimerTime()
+    self.session.processBackspace()
+    self.updateAfterSessionChanged()
   }
 
   private func handleDigitInput(_ event: NSEvent) {
     guard let characters = event.characters, let number = Int(characters) else { return }
 
-    let currentSeconds = self.seconds.truncatingRemainder(dividingBy: 60)
-    let currentMinutes = floor(self.seconds / 60)
-    let result = TimerLogic.processDigitInput(
-      digit: number,
-      currentSeconds: currentSeconds,
-      currentMinutes: currentMinutes,
-      totalSeconds: self.seconds,
-      inputSeconds: self.inputSeconds
-    )
-    if result.accepted {
-      self.paused = false
+    if self.session.processDigitInput(number) {
       self.stop()
-      self.seconds = result.seconds
-      self.updateTimerTime()
+      self.updateAfterSessionChanged()
     }
   }
 }
@@ -139,46 +119,37 @@ extension MVClockView {
 
 extension MVClockView {
   func start() {
-    guard self.seconds > 0 else { return }
-    self.lastTimerSeconds = self.seconds
+    self.cancelTimerTask()
+    guard self.session.start() else { return }
 
-    self.paused = false
-    self.stop()
-
-    self.timerTask = Task { [weak self] in
-      while !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(1), tolerance: .milliseconds(30))
-        self?.tick()
-      }
-    }
+    self.updateAfterSessionChanged()
+    self.runTimerTask()
   }
 
   func stop() {
-    self.timerTask?.cancel()
-    self.timerTask = nil
+    self.cancelTimerTask()
+    self.session.stop()
 
     if self.inDock, !self.paused {
       self.removeBadge()
     }
+    self.updateAfterRunStateChanged()
   }
 
   func startTimer(seconds: CGFloat) {
-    self.paused = false
-    self.stop()
-    self.seconds = seconds
-    self.updateTimerTime()
-    self.start()
+    self.cancelTimerTask()
+    guard self.session.start(seconds: seconds) else { return }
+
+    self.updateAfterSessionChanged()
+    self.runTimerTask()
   }
 
-  private func tick() {
-    guard let timerTime = self.timerTime else { return }
+  func tick() {
+    let completed = self.session.updateRemaining()
+    self.updateAfterSessionChanged(updateTimerTimeLabel: false)
 
-    let secondsRemaining = CGFloat(timerTime.timeIntervalSinceNow)
-
-    self.seconds = max(0, round(secondsRemaining))
-
-    if self.seconds <= 0 {
-      self.stop()
+    if completed {
+      self.cancelTimerTask()
       self.postAccessibilityValueChanged()
       self.onTimerComplete?()
     }
@@ -187,7 +158,7 @@ extension MVClockView {
   func startClockTimer() {
     guard self.currentTimeTask == nil else { return }
 
-    if self.timerTask == nil {
+    if !self.isRunning {
       self.timerTime = Date()
     }
 
@@ -205,12 +176,10 @@ extension MVClockView {
   }
 
   private func maintainCurrentTime() {
-    guard self.timerTask == nil else { return }
+    guard !self.isRunning else { return }
 
-    let time = Date()
-    if Calendar.current.component(.second, from: time) == 0 {
-      self.timerTime = time
-    }
+    self.session.updateCurrentTime()
+    self.updateAfterSessionChanged()
   }
 }
 
@@ -226,7 +195,7 @@ extension MVClockView {
     let mins = Int(self.minutes)
     let secs = Int(self.seconds.truncatingRemainder(dividingBy: 60))
 
-    if self.seconds <= 0, self.timerTask == nil {
+    if self.seconds <= 0, !self.isRunning {
       return "Ready"
     }
 
@@ -235,7 +204,7 @@ extension MVClockView {
     if self.paused {
       return "Paused at \(timeDescription)"
     }
-    if self.timerTask != nil {
+    if self.isRunning {
       return "\(timeDescription) remaining"
     }
     return timeDescription

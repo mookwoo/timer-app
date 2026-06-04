@@ -111,15 +111,13 @@ final class MVTimerController: NSWindowController {
   }
 
   func addTime(seconds: CGFloat) {
-    let currentSeconds = self.clockView.timerTask != nil || self.clockView.paused ? self.clockView.seconds : 0
+    let currentSeconds = self.clockView.isRunning || self.clockView.paused ? self.clockView.seconds : 0
     self.clockView.startTimer(seconds: currentSeconds + seconds)
   }
 
   func resetTimer() {
-    self.clockView.paused = false
     self.clockView.stop()
-    self.clockView.seconds = 0
-    self.clockView.updateTimerTime()
-    self.clockView.inputSeconds = false
+    self.clockView.session.reset()
+    self.clockView.updateAfterSessionChanged()
   }
 }

@@ -96,18 +96,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       clockView.stop()
 
     case "reset":
-      clockView.paused = false
-      clockView.stop()
-      clockView.seconds = 0
-      clockView.updateTimerTime()
-      clockView.inputSeconds = false
+      controller.resetTimer()
 
     case "pause":
-      if clockView.timerTask != nil {
-        clockView.paused = true
-        clockView.stop()
+      if clockView.isRunning {
+        clockView.handleClick()
       } else if clockView.paused, clockView.seconds > 0 {
-        clockView.updateTimerTime()
         clockView.start()
       }
 

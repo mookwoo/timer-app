@@ -22,6 +22,7 @@
 		4C6F0F2C1CACF4B500E9A6F7 /* MVTimerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6F0F2B1CACF4B500E9A6F7 /* MVTimerController.swift */; };
 		723C0C581E12211000E7AE1E /* MVUserDefaultsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 723C0C571E12211000E7AE1E /* MVUserDefaultsKeys.swift */; };
 		AA000001AAAA000100000001 /* TimerLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001AAAA000000000001 /* TimerLogic.swift */; };
+		AA000020AAAA002000000001 /* TimerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000020AAAA002000000000 /* TimerSession.swift */; };
 		AA000010AAAA001000000001 /* MVClockProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000010AAAA001000000000 /* MVClockProgressView.swift */; };
 		AA000011AAAA001100000001 /* MVClockArrowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000011AAAA001100000000 /* MVClockArrowView.swift */; };
 		AA000012AAAA001200000001 /* MVClockFaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000012AAAA001200000000 /* MVClockFaceView.swift */; };
@@ -73,6 +74,7 @@
 		4C6F0F2B1CACF4B500E9A6F7 /* MVTimerController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MVTimerController.swift; sourceTree = "<group>"; };
 		723C0C571E12211000E7AE1E /* MVUserDefaultsKeys.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MVUserDefaultsKeys.swift; sourceTree = "<group>"; };
 		AA000001AAAA000000000001 /* TimerLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerLogic.swift; sourceTree = "<group>"; };
+		AA000020AAAA002000000000 /* TimerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerSession.swift; sourceTree = "<group>"; };
 		AA000010AAAA001000000000 /* MVClockProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MVClockProgressView.swift; sourceTree = "<group>"; };
 		AA000011AAAA001100000000 /* MVClockArrowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MVClockArrowView.swift; sourceTree = "<group>"; };
 		AA000012AAAA001200000000 /* MVClockFaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MVClockFaceView.swift; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 				4C6F0F201CAA3D8600E9A6F7 /* MVLabel.swift */,
 				723C0C571E12211000E7AE1E /* MVUserDefaultsKeys.swift */,
 				AA000001AAAA000000000001 /* TimerLogic.swift */,
+				AA000020AAAA002000000000 /* TimerSession.swift */,
 				DD000001DDDD000100000000 /* TimerScriptCommand.swift */,
 				DD000002DDDD000200000000 /* Timer.sdef */,
 				4C30BBFD1CA7C56500C45EBF /* Assets.xcassets */,
@@ -332,6 +335,7 @@
 				4C30BC161CA7D94500C45EBF /* MVClockView.swift in Sources */,
 				4C30BC101CA7CFBB00C45EBF /* MVTitlebarAccessoryViewController.swift in Sources */,
 				AA000001AAAA000100000001 /* TimerLogic.swift in Sources */,
+				AA000020AAAA002000000001 /* TimerSession.swift in Sources */,
 				AA000010AAAA001000000001 /* MVClockProgressView.swift in Sources */,
 				AA000011AAAA001100000001 /* MVClockArrowView.swift in Sources */,
 				AA000012AAAA001200000001 /* MVClockFaceView.swift in Sources */,
