@@ -9,6 +9,7 @@ final class MVMainView: NSView {
   weak var controller: MVTimerController?
   private let contextMenu = NSMenu(title: "Menu")
   private(set) var menuItem: NSMenuItem?
+  private var displayModeItems: [NSMenuItem] = []
 
   override var menu: NSMenu? {
     get { self.contextMenu }
@@ -47,6 +48,22 @@ final class MVMainView: NSView {
     }
     self.contextMenu.addItem(menuItemSoundChoice)
     self.contextMenu.setSubmenu(submenu, for: menuItemSoundChoice)
+
+    let displayModeChoice = NSMenuItem(
+      title: "Timer Style",
+      action: nil,
+      keyEquivalent: ""
+    )
+    let displayModeMenu = NSMenu()
+    for mode in MVClockView.DisplayMode.allCases {
+      let item = NSMenuItem(title: mode.title, action: #selector(self.pickDisplayMode), keyEquivalent: "")
+      item.representedObject = mode.rawValue
+      item.state = mode == MVClockView.DisplayMode.saved ? .on : .off
+      displayModeMenu.addItem(item)
+      self.displayModeItems.append(item)
+    }
+    self.contextMenu.addItem(displayModeChoice)
+    self.contextMenu.setSubmenu(displayModeMenu, for: displayModeChoice)
   }
 
   required init?(coder _: NSCoder) {
@@ -71,9 +88,28 @@ final class MVMainView: NSView {
     self.controller?.pickSound(sender.tag)
   }
 
+  @objc func pickDisplayMode(_ sender: NSMenuItem) {
+    guard let rawValue = sender.representedObject as? String,
+          let mode = MVClockView.DisplayMode(rawValue: rawValue) else { return }
+
+    for item in self.displayModeItems {
+      item.state = item == sender ? .on : .off
+    }
+    self.controller?.pickDisplayMode(mode)
+  }
+
   override func draw(_: NSRect) {
-    let radius: CGFloat = 4.53
+    let radius = max(12, min(self.bounds.width, self.bounds.height) * 0.12)
     let path = NSBezierPath(roundedRect: self.bounds, xRadius: radius, yRadius: radius)
     Self.backgroundGradient?.draw(in: path, angle: -90)
+
+    NSColor.white.withAlphaComponent(0.18).setStroke()
+    path.lineWidth = 1
+    path.stroke()
+  }
+
+  override func setFrameSize(_ newSize: NSSize) {
+    super.setFrameSize(newSize)
+    self.needsDisplay = true
   }
 }

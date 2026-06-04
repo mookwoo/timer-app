@@ -1,6 +1,7 @@
 enum MVUserDefaultsKeys {
   static let staysOnTop = "staysOnTop"
   static let soundIndex = "soundIndex"
+  static let displayMode = "displayMode"
 }
 
 enum MVNotificationIdentifiers {

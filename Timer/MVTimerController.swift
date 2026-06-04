@@ -21,6 +21,8 @@ final class MVTimerController: NSWindowController {
     mainView.controller = self
     self.clockView.onTimerComplete = { [weak self] in self?.handleClockTimer() }
     mainView.addSubview(self.clockView)
+    self.clockView.frame = mainView.bounds
+    self.clockView.autoresizingMask = [.width, .height]
     self.dockMenuItem = mainView.menuItem
 
     self.windowFrameAutosaveName = "TimerWindowAutosaveFrame"
@@ -103,6 +105,10 @@ final class MVTimerController: NSWindowController {
     } else {
       self.soundURL = nil
     }
+  }
+
+  func pickDisplayMode(_ mode: MVClockView.DisplayMode) {
+    self.clockView.displayMode = mode
   }
 
   func restartLastTimer() {

@@ -1,10 +1,28 @@
 import AppKit
 
 final class MVClockView: NSView {
+  enum DisplayMode: String, CaseIterable {
+    case analog
+    case digital
+
+    static var saved: DisplayMode {
+      let rawValue = UserDefaults.standard.string(forKey: MVUserDefaultsKeys.displayMode)
+      return rawValue.flatMap(DisplayMode.init(rawValue:)) ?? .analog
+    }
+
+    var title: String {
+      switch self {
+      case .analog: "Analog"
+      case .digital: "Digital"
+      }
+    }
+  }
+
   override var mouseDownCanMoveWindow: Bool { false }
 
   private static let minutesFont = NSFont.monospacedDigitSystemFont(ofSize: 35, weight: .medium)
   private static let secondsFont = NSFont.monospacedDigitSystemFont(ofSize: 15, weight: .regular)
+  private static let baseSize: CGFloat = 150.0
 
   private let progressView = MVClockProgressView()
   private let arrowView = MVClockArrowView(center: CGPoint(x: 75, y: 75))
@@ -23,6 +41,40 @@ final class MVClockView: NSView {
     label.alignment = .center
     label.textColor = NSColor(resource: .timerTime)
     return label
+  }()
+
+  private let digitalTimeLabel: MVLabel = {
+    let label = MVLabel(frame: NSRect(x: 0, y: 54, width: 150, height: 42))
+    label.string = "00:00"
+    label.font = NSFont.monospacedDigitSystemFont(ofSize: 38, weight: .semibold)
+    label.alignment = .center
+    label.textColor = NSColor(resource: .minutes)
+    label.alphaValue = 0.0
+    return label
+  }()
+
+  private let digitalStatusLabel: MVLabel = {
+    let label = MVLabel(frame: NSRect(x: 0, y: 38, width: 150, height: 18))
+    label.string = ""
+    label.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+    label.alignment = .center
+    label.textColor = NSColor(resource: .timerTime)
+    label.alphaValue = 0.0
+    return label
+  }()
+
+  private lazy var displayModeControl: NSSegmentedControl = {
+    let control = NSSegmentedControl(
+      labels: ["Dial", "Digital"],
+      trackingMode: .selectOne,
+      target: self,
+      action: #selector(self.pickDisplayMode)
+    )
+    control.segmentStyle = .capsule
+    control.selectedSegment = self.displayMode == .analog ? 0 : 1
+    control.setToolTip("Analog timer", forSegment: 0)
+    control.setToolTip("Digital timer", forSegment: 1)
+    return control
   }()
 
   private let minutesLabel: MVLabel = {
@@ -100,6 +152,16 @@ final class MVClockView: NSView {
     }
   }
 
+  var displayMode: DisplayMode = .saved {
+    didSet {
+      guard oldValue != self.displayMode else { return }
+      UserDefaults.standard.set(self.displayMode.rawValue, forKey: MVUserDefaultsKeys.displayMode)
+      self.displayModeControl.selectedSegment = self.displayMode == .analog ? 0 : 1
+      self.updateDisplayMode()
+      self.refreshForCurrentSize()
+    }
+  }
+
   var isRunning: Bool {
     self.session.isRunning
   }
@@ -115,6 +177,7 @@ final class MVClockView: NSView {
   func updateAfterSecondsChanged() {
     if self.windowIsVisible {
       self.updateLabels()
+      self.updateDigitalLabels()
       self.layoutSubviews()
     }
     self.updateBadge()
@@ -123,6 +186,7 @@ final class MVClockView: NSView {
   func updateAfterSessionChanged(updateTimerTimeLabel: Bool = true) {
     if self.windowIsVisible {
       self.updateLabels()
+      self.updateDigitalLabels()
       if updateTimerTimeLabel {
         self.updateTimeLabel()
       }
@@ -133,6 +197,9 @@ final class MVClockView: NSView {
   }
 
   func updateAfterRunStateChanged() {
+    if self.windowIsVisible {
+      self.updateDigitalLabels()
+    }
     self.layoutPauseViews()
     self.updateBadge()
   }
@@ -178,9 +245,13 @@ final class MVClockView: NSView {
     self.addSubview(self.timerTimeLabel)
     self.addSubview(self.minutesLabel)
     self.addSubview(self.secondsLabel)
+    self.addSubview(self.digitalTimeLabel)
+    self.addSubview(self.digitalStatusLabel)
+    self.addSubview(self.displayModeControl)
 
     self.updateClockFaceView()
     self.updateAllViews()
+    self.updateDisplayMode()
   }
 
   override func viewDidMoveToWindow() {
@@ -202,6 +273,11 @@ final class MVClockView: NSView {
         }
       )
     }
+  }
+
+  override func setFrameSize(_ newSize: NSSize) {
+    super.setFrameSize(newSize)
+    self.refreshForCurrentSize()
   }
 
   deinit {
@@ -227,12 +303,25 @@ extension MVClockView {
     view.frame = frame
   }
 
+  override func layout() {
+    super.layout()
+    self.refreshForCurrentSize()
+  }
+
   private func layoutSubviews() {
+    let scale = self.layoutScale
+    let center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+    self.progressView.frame = self.rect(x: 17, y: 17, width: 116, height: 116)
+    self.clockFaceView.frame = self.rect(x: 16, y: 15, width: 118, height: 118)
+    self.pauseIconImageView.frame = self.rect(x: 70, y: 99, width: 10, height: 12)
+    self.arrowView.frame.size = NSSize(width: 25 * scale, height: 25 * scale)
+    self.arrowView.updateControlCenter(center)
+
     let angle = -self.progress * .pi * 2 + .pi / 2
 
     // swiftlint:disable identifier_name
-    let x = self.bounds.width / 2 + cos(angle) * self.progressView.bounds.width / 2
-    let y = self.bounds.height / 2 + sin(angle) * self.progressView.bounds.height / 2
+    let x = center.x + cos(angle) * self.progressView.bounds.width / 2
+    let y = center.y + sin(angle) * self.progressView.bounds.height / 2
     // swiftlint:enable identifier_name
 
     let point = NSPoint(x: x - self.arrowView.bounds.width / 2, y: y - self.arrowView.bounds.height / 2)
@@ -242,6 +331,28 @@ extension MVClockView {
 
     self.progressView.progress = self.progress
     self.arrowView.progress = self.progress
+  }
+
+  private func refreshForCurrentSize() {
+    self.layoutSubviews()
+    self.layoutDisplayLabels()
+    self.updateLabels()
+    self.updateDigitalLabels()
+    self.progressView.needsDisplay = true
+    self.arrowView.needsDisplay = true
+    self.clockFaceView.needsDisplay = true
+  }
+
+  private var layoutScale: CGFloat {
+    max(1, min(self.bounds.width, self.bounds.height) / Self.baseSize)
+  }
+
+  private func rect(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) -> NSRect {
+    let scale = self.layoutScale
+    let contentSize = Self.baseSize * scale
+    let originX = round((self.bounds.width - contentSize) / 2 + x * scale)
+    let originY = round((self.bounds.height - contentSize) / 2 + y * scale)
+    return NSRect(x: originX, y: originY, width: width * scale, height: height * scale)
   }
 
   private func handleArrowControl(progress rawProgress: CGFloat) {
@@ -277,9 +388,10 @@ extension MVClockView {
   }
 
   private func layoutPauseViews() {
-    let showPauseIcon = self.paused
+    let showAnalog = self.displayMode == .analog
+    let showPauseIcon = showAnalog && self.paused
     let pauseIconAlpha = showPauseIcon ? 1.0 : 0.0
-    let timerTimeAlpha = showPauseIcon ? 0.0 : 1.0
+    let timerTimeAlpha = showAnalog && !showPauseIcon ? 1.0 : 0.0
     guard self.pauseIconImageView.alphaValue != pauseIconAlpha || self.timerTimeLabel.alphaValue != timerTimeAlpha else {
       return
     }
@@ -294,6 +406,7 @@ extension MVClockView {
 
   private func updateAllViews() {
     self.updateLabels()
+    self.updateDigitalLabels()
     self.updateTimeLabel()
     self.layoutSubviews()
   }
@@ -306,11 +419,15 @@ extension MVClockView {
   }
 
   private func updateLabels() {
+    let scale = self.layoutScale
+    self.minutesLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 35 * scale, weight: .medium)
+    self.secondsLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 15 * scale, weight: .regular)
     self.minutesLabel.string = TimerLogic.minutesDisplayString(seconds: self.seconds)
-    let suffixWidth: CGFloat = self.seconds < 60 ? self.minutesLabelSecondsSuffixWidth : self.minutesLabelSuffixWidth
+    let suffixWidth: CGFloat = self.seconds < 60 ? self.minutesLabelSecondsSuffixWidth * scale : self.minutesLabelSuffixWidth * scale
     self.minutesLabel.sizeToFit()
 
     var frame = self.minutesLabel.frame
+    frame.origin.y = self.rect(x: 0, y: 57, width: Self.baseSize, height: 30).origin.y
     frame.origin.x = round((self.bounds.width - (frame.size.width - suffixWidth)) / 2)
     self.minutesLabel.frame = frame
 
@@ -319,9 +436,78 @@ extension MVClockView {
       self.secondsLabel.sizeToFit()
 
       frame = self.secondsLabel.frame
-      frame.origin.x = round((self.bounds.width - (frame.size.width - self.secondsSuffixWidth)) / 2)
+      frame.origin.y = self.rect(x: 0, y: 38, width: Self.baseSize, height: 20).origin.y
+      frame.origin.x = round((self.bounds.width - (frame.size.width - self.secondsSuffixWidth * scale)) / 2)
       self.secondsLabel.frame = frame
     }
+  }
+
+  private func layoutDisplayLabels() {
+    let scale = self.layoutScale
+    self.timerTimeLabel.frame = self.rect(x: 0, y: 94, width: Self.baseSize, height: 20)
+    self.timerTimeLabel.font = NSFont.systemFont(ofSize: 15 * scale, weight: .medium)
+
+    self.digitalTimeLabel.frame = self.rect(x: 4, y: 55, width: 142, height: 44)
+    self.digitalTimeLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 34 * scale, weight: .semibold)
+    self.digitalStatusLabel.frame = self.rect(x: 0, y: 39, width: Self.baseSize, height: 18)
+    self.digitalStatusLabel.font = NSFont.systemFont(ofSize: 11 * scale, weight: .medium)
+
+    let controlWidth = min(106 * scale, self.bounds.width - 28)
+    self.displayModeControl.frame = NSRect(
+      x: round((self.bounds.width - controlWidth) / 2),
+      y: round(10 * scale),
+      width: controlWidth,
+      height: 22
+    )
+  }
+
+  private func updateDigitalLabels() {
+    self.digitalTimeLabel.string = self.digitalTimeString
+    if self.paused {
+      self.digitalStatusLabel.string = "Paused"
+    } else if self.isRunning {
+      self.digitalStatusLabel.string = "Remaining"
+    } else if self.seconds > 0 {
+      self.digitalStatusLabel.string = "Ready"
+    } else {
+      self.digitalStatusLabel.string = "Set timer"
+    }
+  }
+
+  private var digitalTimeString: String {
+    let totalSeconds = Int(self.seconds)
+    let hours = totalSeconds / 3_600
+    let minutes = (totalSeconds / 60) % 60
+    let seconds = totalSeconds % 60
+
+    if hours > 0 {
+      return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+    }
+    return String(format: "%02d:%02d", minutes, seconds)
+  }
+
+  private func updateDisplayMode() {
+    let showDigital = self.displayMode == .digital
+    let analogTextAlpha = showDigital ? 0.0 : 1.0
+    let digitalAlpha = showDigital ? 1.0 : 0.0
+    self.progressView.isHidden = false
+    self.arrowView.isHidden = false
+    self.clockFaceView.alphaValue = analogTextAlpha
+    self.clockFaceView.isHidden = showDigital
+    for view in [self.minutesLabel, self.secondsLabel, self.timerTimeLabel] {
+      view.alphaValue = analogTextAlpha
+      view.isHidden = showDigital
+    }
+    self.pauseIconImageView.isHidden = showDigital
+    self.digitalTimeLabel.alphaValue = digitalAlpha
+    self.digitalStatusLabel.alphaValue = digitalAlpha
+    self.digitalTimeLabel.isHidden = !showDigital
+    self.digitalStatusLabel.isHidden = !showDigital
+    self.layoutPauseViews()
+  }
+
+  @objc private func pickDisplayMode(_ sender: NSSegmentedControl) {
+    self.displayMode = sender.selectedSegment == 0 ? .analog : .digital
   }
 
   private func updateBadge() {
@@ -357,6 +543,9 @@ extension MVClockView {
 
   override func hitTest(_ aPoint: NSPoint) -> NSView? {
     let view = super.hitTest(aPoint)
+    if view == self.displayModeControl || view?.isDescendant(of: self.displayModeControl) == true {
+      return view
+    }
     if view == self.arrowView {
       return view
     }

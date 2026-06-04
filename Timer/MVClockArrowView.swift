@@ -20,6 +20,10 @@ final class MVClockArrowView: NSView {
     self.center = center
   }
 
+  func updateControlCenter(_ center: CGPoint) {
+    self.center = center
+  }
+
   override func draw(_: NSRect) {
     NSColor.clear.setFill()
     self.bounds.fill()
