@@ -1,18 +1,6 @@
 import AppKit
 import UserNotifications
 
-private final class MVNotificationResponseCompletion: @unchecked Sendable {
-  private let completionHandler: () -> Void
-
-  init(_ completionHandler: @escaping () -> Void) {
-    self.completionHandler = completionHandler
-  }
-
-  func call() {
-    self.completionHandler()
-  }
-}
-
 @main
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -92,15 +80,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     switch input.lowercased() {
     case "stop":
-      clockView.paused = false
-      clockView.stop()
+      controller.stopTimer()
 
     case "reset":
-      clockView.paused = false
-      clockView.stop()
-      clockView.seconds = 0
-      clockView.updateTimerTime()
-      clockView.inputSeconds = false
+      controller.resetTimer()
 
     case "pause":
       if clockView.timerTask != nil {
@@ -182,11 +165,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     let controllerIdentifier = response.notification.request.content.userInfo[
       MVNotificationUserInfoKeys.controllerIdentifier
     ] as? String
-    let completion = MVNotificationResponseCompletion(completionHandler)
 
-    DispatchQueue.main.async { [weak self, completion] in
+    completionHandler()
+
+    DispatchQueue.main.async { [weak self] in
       self?.handleNotificationAction(actionIdentifier, controllerIdentifier: controllerIdentifier)
-      completion.call()
     }
   }
 
@@ -239,8 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       controller.addTime(seconds: CGFloat(5 * 60))
 
     case MVNotificationIdentifiers.stopTimerActionIdentifier:
-      controller.clockView.paused = false
-      controller.clockView.stop()
+      controller.stopTimer()
 
     case UNNotificationDefaultActionIdentifier:
       controller.window?.makeKeyAndOrderFront(nil)

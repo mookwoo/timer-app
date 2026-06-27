@@ -9,6 +9,7 @@ final class MVTimerController: NSWindowController {
   let clockView = MVClockView()
 
   private var audioPlayer: AVAudioPlayer? // player must be kept in memory
+  private var userAttentionRequest: Int?
   private var soundURL = Bundle.main.url(forResource: "alert-sound", withExtension: "caf")
 
   convenience init() {
@@ -73,15 +74,21 @@ final class MVTimerController: NSWindowController {
   }
 
   private func handleClockTimer() {
+    self.stopCompletionEffects()
+
     let content = UNMutableNotificationContent()
     content.title = "It's time! 🕘"
     content.categoryIdentifier = MVNotificationIdentifiers.timerCompleteCategoryIdentifier
     content.userInfo = [MVNotificationUserInfoKeys.controllerIdentifier: self.identifier]
 
     let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-    UNUserNotificationCenter.current().add(request)
+    UNUserNotificationCenter.current().add(request) { error in
+      if let error {
+        NSLog("Notification scheduling failed: %@", error.localizedDescription)
+      }
+    }
 
-    NSApplication.shared.requestUserAttention(.criticalRequest)
+    self.userAttentionRequest = NSApplication.shared.requestUserAttention(.criticalRequest)
 
     self.playAlarmSound()
   }
@@ -107,19 +114,36 @@ final class MVTimerController: NSWindowController {
 
   func restartLastTimer() {
     guard let seconds = self.clockView.lastTimerSeconds, seconds > 0 else { return }
+    self.stopCompletionEffects()
     self.clockView.startTimer(seconds: seconds)
   }
 
   func addTime(seconds: CGFloat) {
     let currentSeconds = self.clockView.timerTask != nil || self.clockView.paused ? self.clockView.seconds : 0
+    self.stopCompletionEffects()
     self.clockView.startTimer(seconds: currentSeconds + seconds)
   }
 
-  func resetTimer() {
+  func stopTimer() {
+    self.stopCompletionEffects()
     self.clockView.paused = false
     self.clockView.stop()
+  }
+
+  func resetTimer() {
+    self.stopTimer()
     self.clockView.seconds = 0
     self.clockView.updateTimerTime()
     self.clockView.inputSeconds = false
+  }
+
+  private func stopCompletionEffects() {
+    self.audioPlayer?.stop()
+    self.audioPlayer = nil
+
+    if let userAttentionRequest {
+      NSApplication.shared.cancelUserAttentionRequest(userAttentionRequest)
+      self.userAttentionRequest = nil
+    }
   }
 }
